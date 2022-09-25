@@ -3,11 +3,11 @@
 ## Source: https://github.com/hexojs/hexo/
 
 # Site
-title: Hexo
+title: Roland's Programmig Thinking
 subtitle: ''
-description: ''
+description: 'my thinking of distributed system, database, computer architecture, deep learning and more.'
 keywords:
-author: John Doe
+author: Roland Qi
 language: en
 timezone: ''
 
