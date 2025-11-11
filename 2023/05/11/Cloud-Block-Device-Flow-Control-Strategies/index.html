@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+  <link rel="mask-icon" href="/images/safari-pinned-tab.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"rolandqi.github.io","root":"/","scheme":"Gemini","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="QoS Rate Limiting Algorithms IntroductionRate limiting strategies mainly include token bucket and leaky bucket, which are introduced as follows. Token BucketWiki’s algorithm description of token bucke">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Cloud Block Device Flow Control Strategies">
+<meta property="og:url" content="https://rolandqi.github.io/2023/05/11/Cloud-Block-Device-Flow-Control-Strategies/index.html">
+<meta property="og:site_name" content="Roland&#39;s Programmig Thinking">
+<meta property="og:description" content="QoS Rate Limiting Algorithms IntroductionRate limiting strategies mainly include token bucket and leaky bucket, which are introduced as follows. Token BucketWiki’s algorithm description of token bucke">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2023-05-11T12:39:50.000Z">
+<meta property="article:modified_time" content="2025-11-11T05:21:08.696Z">
+<meta property="article:author" content="Roland Qi">
+<meta property="article:tag" content="disributed system">
+<meta property="article:tag" content="block device">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="https://rolandqi.github.io/2023/05/11/Cloud-Block-Device-Flow-Control-Strategies/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'en'
+  };
+</script>
+
+  <title>Cloud Block Device Flow Control Strategies | Roland's Programmig Thinking</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">Roland's Programmig Thinking</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="en">
+    <link itemprop="mainEntityOfPage" href="https://rolandqi.github.io/2023/05/11/Cloud-Block-Device-Flow-Control-Strategies/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Roland Qi">
+      <meta itemprop="description" content="my thinking of distributed system, database, computer architecture, deep learning and more.">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Roland's Programmig Thinking">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Cloud Block Device Flow Control Strategies
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2023-05-11 12:39:50" itemprop="dateCreated datePublished" datetime="2023-05-11T12:39:50+00:00">2023-05-11</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2025-11-11 05:21:08" itemprop="dateModified" datetime="2025-11-11T05:21:08+00:00">2025-11-11</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="QoS-Rate-Limiting-Algorithms-Introduction"><a href="#QoS-Rate-Limiting-Algorithms-Introduction" class="headerlink" title="QoS Rate Limiting Algorithms Introduction"></a>QoS Rate Limiting Algorithms Introduction</h2><p>Rate limiting strategies mainly include token bucket and leaky bucket, which are introduced as follows.</p>
+<h3 id="Token-Bucket"><a href="#Token-Bucket" class="headerlink" title="Token Bucket"></a>Token Bucket</h3><p>Wiki’s algorithm description of token bucket is as follows:</p>
+<ul>
+<li>A token is added to the bucket every <code>1/r</code> seconds.</li>
+<li>The bucket can hold at the most <code>b</code> tokens. If a token arrives when the bucket is full, <strong>it is discarded</strong>.</li>
+<li>When a packet (network layer PDU) of n bytes arrives,<ul>
+<li>if at least n tokens are in the bucket, n tokens are removed from the bucket, and the packet is sent to the network.</li>
+<li>if fewer than n tokens are available, no tokens are removed from the bucket, and the packet is considered to be non-conformant.</li>
+</ul>
+</li>
+</ul>
+<p>A bucket with fixed capacity holds a certain number of tokens, where the bucket’s capacity is the upper limit of token count. The number of tokens in the bucket is replenished at fixed intervals until the bucket is full. An IO request will consume one token; if there are tokens in the bucket, the IO request is allowed after consuming a token; otherwise, it cannot be allowed (the algorithm can choose whether to discard the IO request). If rate limiting is based on byte count, each IO will consume tokens equivalent to the iosize.</p>
+<p>Based on the above description, we can understand that the token bucket algorithm can achieve the following effects:</p>
+<ol>
+<li>The token bucket algorithm can control the rate of processing IO requests by controlling the token replenishment rate;</li>
+<li><strong>The token bucket algorithm allows a certain degree of burst</strong>—as long as the tokens in the bucket are not exhausted, IO requests can immediately consume tokens and be allowed through. During this period, the IO request processing rate will be greater than the token replenishment rate, where the token replenishment rate actually represents the average processing rate;</li>
+<li>**The token bucket algorithm cannot control the upper limit of burst rate and burst duration. The burst duration is determined by the actual IO request rate. If the actual IO request rate is greater than the token replenishment rate and remains constant, then: Burst duration &#x3D; Token bucket capacity &#x2F; (Actual IO request rate - Token replenishment rate)</li>
+</ol>
+<h3 id="Leaky-Bucket"><a href="#Leaky-Bucket" class="headerlink" title="Leaky Bucket"></a>Leaky Bucket</h3><h4 id="Leaky-bucket-as-a-meter"><a href="#Leaky-bucket-as-a-meter" class="headerlink" title="Leaky bucket as a meter"></a>Leaky bucket as a meter</h4><p>Wiki defines Leaky bucket as a meter as follows:</p>
+<ul>
+<li>A fixed capacity bucket, associated with each virtual connection or user, leaks at a fixed rate.</li>
+<li>If the bucket is empty, it stops leaking.</li>
+<li>For a packet to conform, it has to be possible to add a specific amount of water to the bucket: The specific amount added by a conforming packet can be the same for all packets, or can be proportional to the length of the packet.</li>
+<li>If this amount of water would cause the bucket to exceed its capacity then the packet does not conform and the water in the bucket is left unchanged.</li>
+</ul>
+<p>We can understand it as follows:</p>
+<p>A bucket leaks water at a fixed rate. Passing IO request packets add water to the bucket. The amount of water added is based on the aspect of flow control, which could be bytes or IOPS. If adding water causes overflow, the IO cannot pass; otherwise, it can be allowed through.</p>
+<p>It can be seen that this algorithm description is basically similar to the token bucket. We can consider <code>Leaky bucket as a meter</code> and <code>Token Bucket</code> to be equivalent.</p>
+<h4 id="Leaky-bucket-as-a-queue"><a href="#Leaky-bucket-as-a-queue" class="headerlink" title="Leaky bucket as a queue"></a>Leaky bucket as a queue</h4><p>Wiki’s description of this rate limiting strategy is: <strong>The leaky bucket consists of a finite queue. When a packet arrives, if there is room on the queue it is appended to the queue; otherwise it is discarded. At every clock tick one packet is transmitted (unless the queue is empty)</strong></p>
+<p>It can be considered that <code>Leaky bucket as a queue</code> is the scenario where the token bucket size equals 1.</p>
+<h2 id="Mainstream-Block-Device-Flow-Control-Solutions"><a href="#Mainstream-Block-Device-Flow-Control-Solutions" class="headerlink" title="Mainstream Block Device Flow Control Solutions"></a>Mainstream Block Device Flow Control Solutions</h2><p>The mainstream flow control strategies widely applied in engineering mainly include three types: qemu, librbd, and spdk, which are introduced respectively below.</p>
+<h3 id="Qemu"><a href="#Qemu" class="headerlink" title="Qemu"></a>Qemu</h3><p>Qemu supported block device IO rate limiting as early as version 1.1, providing 6 configuration items to set rate limits for IOPS and bandwidth in 6 different scenarios. Version 1.7 added support for bursts to block device IO rate limiting. Version 2.6 improved the burst support functionality, allowing control over burst rate and duration. The parameters are as follows:</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Basic Rate Limit Config</th>
+<th>Burst Rate Config</th>
+<th>Burst Duration Config</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Total IOPS</td>
+<td>iops-total</td>
+<td>iops-total-max</td>
+<td>iops-total-max-length</td>
+</tr>
+<tr>
+<td>Read IOPS</td>
+<td>iops-read</td>
+<td>iops-read-max</td>
+<td>iops-read-max-length</td>
+</tr>
+<tr>
+<td>Write IOPS</td>
+<td>iops-write</td>
+<td>iops-write-max</td>
+<td>iops-write-max-length</td>
+</tr>
+<tr>
+<td>Total BPS</td>
+<td>bps-total</td>
+<td>bps-total-max</td>
+<td>bps-total-max-length</td>
+</tr>
+<tr>
+<td>Read BPS</td>
+<td>bps-read</td>
+<td>bps-read-max</td>
+<td>bps-read-max-length</td>
+</tr>
+<tr>
+<td>Write BPS</td>
+<td>bps-write</td>
+<td>bps-write-max</td>
+<td>bps-write-max-length</td>
+</tr>
+</tbody></table>
+<p>The core data structure of its implementation is described as follows:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">LeakyBucket</span> &#123;</span></span><br><span class="line">    <span class="type">uint64_t</span> avg;             <span class="comment">/* IO limit target rate */</span></span><br><span class="line">    <span class="type">uint64_t</span> max;             <span class="comment">/* IO burst limit rate */</span></span><br><span class="line">    <span class="type">double</span>  level;            <span class="comment">/* bucket level in units */</span></span><br><span class="line">    <span class="type">double</span>  burst_level;      <span class="comment">/* bucket level in units (for computing bursts) */</span></span><br><span class="line">    <span class="type">uint64_t</span> burst_length;    <span class="comment">/* Burst duration, default unit is seconds */</span></span><br><span class="line">&#125; LeakyBucket</span><br></pre></td></tr></table></figure>
+
+<p>Qemu’s flow control algorithm uses a leaky bucket implementation. The goal of the algorithm is that the user can have a burst rate of <code>bkt.max</code> for <code>bkt.burst_length</code> seconds, after which the rate drops to <code>bkt.avg</code>.</p>
+<p>To achieve this goal, qemu implements two buckets:</p>
+<ol>
+<li>Main bucket: Size <code>bucket_size</code> is <code>bkt.max * bkt.burst_length</code>, leaking at rate <code>bkt.avg</code>. Normal IOs are processed by the main bucket first.</li>
+<li>Burst bucket: Size <code>burst_bucket_size</code> is set to one-tenth of the main bucket, leaking at rate <code>bkt.max</code>.</li>
+</ol>
+<p>If the main bucket is full, then it needs to wait for the leaky bucket. If the main bucket is not full and a burst bucket is set, it needs to check whether the burst bucket can allow passage. This way, we ensure the IO burst rate through the burst bucket, and guarantee the burst duration through the size of the main bucket.</p>
+<p>The key function controlling whether IO can be allowed is as follows:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* This function compute the wait time in ns that a leaky bucket should trigger</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * @bkt: the leaky bucket we operate on</span></span><br><span class="line"><span class="comment"> * @ret: the resulting wait time in ns or 0 if the operation can go through</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="type">int64_t</span> <span class="title function_">throttle_compute_wait</span><span class="params">(LeakyBucket *bkt)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">double</span> extra; <span class="comment">/* the number of extra units blocking the io */</span></span><br><span class="line">    <span class="type">double</span> bucket_size;   <span class="comment">/* I/O before throttling to bkt-&gt;avg */</span></span><br><span class="line">    <span class="type">double</span> burst_bucket_size; <span class="comment">/* Before throttling to bkt-&gt;max */</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!bkt-&gt;avg) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!bkt-&gt;max) &#123;</span><br><span class="line">        <span class="comment">/* If bkt-&gt;max is 0 we still want to allow short bursts of I/O</span></span><br><span class="line"><span class="comment">         * from the guest, otherwise every other request will be throttled</span></span><br><span class="line"><span class="comment">         * and performance will suffer considerably. */</span></span><br><span class="line">        bucket_size = (<span class="type">double</span>) bkt-&gt;avg / <span class="number">10</span>;</span><br><span class="line">        burst_bucket_size = <span class="number">0</span>;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">/* If we have a burst limit then we have to wait until all I/O</span></span><br><span class="line"><span class="comment">         * at burst rate has finished before throttling to bkt-&gt;avg */</span></span><br><span class="line">        bucket_size = bkt-&gt;max * bkt-&gt;burst_length;</span><br><span class="line">        burst_bucket_size = (<span class="type">double</span>) bkt-&gt;max / <span class="number">10</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* If the main bucket is full then we have to wait */</span></span><br><span class="line">    extra = bkt-&gt;level - bucket_size;</span><br><span class="line">    <span class="keyword">if</span> (extra &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> throttle_do_compute_wait(bkt-&gt;avg, extra);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* If the main bucket is not full yet we still have to check the</span></span><br><span class="line"><span class="comment">     * burst bucket in order to enforce the burst limit */</span></span><br><span class="line">    <span class="keyword">if</span> (bkt-&gt;burst_length &gt; <span class="number">1</span>) &#123;</span><br><span class="line">        assert(bkt-&gt;max &gt; <span class="number">0</span>); <span class="comment">/* see throttle_is_valid() */</span></span><br><span class="line">        extra = bkt-&gt;burst_level - burst_bucket_size;</span><br><span class="line">    <span class="keyword">if</span> (extra &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> throttle_do_compute_wait(bkt-&gt;max, extra);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="librbd"><a href="#librbd" class="headerlink" title="librbd"></a>librbd</h3><p>Ceph supported IO rate limiting for RBD images starting from version 13.2.0 (Mimic). This version only supported rate limiting for total IOPS scenario and supported bursts, allowing configuration of burst rate but not controlling burst duration (effectively equivalent to setting burst duration to 1 second and unmodifiable). Version 14.2.0 (Nautilus) added support for rate limiting in 5 additional scenarios: read IOPS, write IOPS, total BPS, read BPS, and write BPS, while maintaining the same burst support effects.</p>
+<p>Librbd’s rate limiting mechanism supports bursts and allows configuration of burst rates, but does not support controlling burst duration. It is implemented using a token bucket. The token bucket refill rate can be adjusted using the <code>rbd_qos_schedule_tick_min</code> parameter, defaulting to 50ms. Users can configure the base rate and burst rate through the following parameters:</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Basic Rate Limit Config</th>
+<th>Burst Rate Config</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Total IOPS</td>
+<td>rbd_qos_iops_limit</td>
+<td>rbd_qos_iops_burst</td>
+</tr>
+<tr>
+<td>Read IOPS</td>
+<td>rbd_qos_iops_read_limit</td>
+<td>rbd_qos_iops_read_burst</td>
+</tr>
+<tr>
+<td>Write IOPS</td>
+<td>rbd_qos_iops_write_limit</td>
+<td>rbd_qos_iops_write_burst</td>
+</tr>
+<tr>
+<td>Total BPS</td>
+<td>rbd_qos_bps_limit</td>
+<td>rbd_qos_bps_burst</td>
+</tr>
+<tr>
+<td>Read BPS</td>
+<td>rbd_qos_bps_read_limit</td>
+<td>rbd_qos_bps_read_burst</td>
+</tr>
+<tr>
+<td>Write BPS</td>
+<td>rbd_qos_bps_write_limit</td>
+<td>rbd_qos_bps_write_burst</td>
+</tr>
+</tbody></table>
+<h3 id="spdk"><a href="#spdk" class="headerlink" title="spdk"></a>spdk</h3><p>SPDK’s QoS rate limiting is implemented at the bdev layer and uses a token bucket. It supports separate configuration for IOPS and BW but does not support burst rates. Configuration is done via the RPC request <code>bdev_set_qos_limit</code>. The configuration parameters are as follows:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Explanation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>rw_ios_per_sec</td>
+<td>IOPS limit</td>
+</tr>
+<tr>
+<td>rw_mbytes_per_sec</td>
+<td>Read&#x2F;Write bandwidth limit</td>
+</tr>
+<tr>
+<td>r_mbytes_per_sec</td>
+<td>Read bandwidth limit</td>
+</tr>
+<tr>
+<td>w_mbytes_per_sec</td>
+<td>Write bandwidth limit</td>
+</tr>
+</tbody></table>
+<p>SPDK refills the token bucket by registering a poller function <code>bdev_channel_poll_qos</code>, with a frequency hardcoded as <code>SPDK_BDEV_QOS_TIMESLICE_IN_USEC</code>, defaulting to 1ms. The amount of tokens added per refill is <code>Total rate / Timeslice</code>.</p>
+<p>An IO must pass through all configured token buckets before it can be allowed. A token bucket can be decremented to a negative value in a single operation. Once it becomes negative, all IOs cannot be allowed until the function <code>bdev_channel_poll_qos</code> refills the token bucket to a positive value.</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">int</span></span><br><span class="line"><span class="title function_">bdev_channel_poll_qos</span><span class="params">(<span class="type">void</span> *arg)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">spdk_bdev_qos</span> *<span class="title">qos</span> =</span> arg;</span><br><span class="line">    <span class="type">uint64_t</span> now = spdk_get_ticks();</span><br><span class="line">    <span class="type">int</span> i;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (now &lt; (qos-&gt;last_timeslice + qos-&gt;timeslice_size)) &#123;</span><br><span class="line">        <span class="comment">/* We received our callback earlier than expected - return</span></span><br><span class="line"><span class="comment">         *  immediately and wait to do accounting until at least one</span></span><br><span class="line"><span class="comment">         *  timeslice has actually expired.  This should never happen</span></span><br><span class="line"><span class="comment">         *  with a well-behaved timer implementation.</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">return</span> SPDK_POLLER_IDLE;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Reset for next round of rate limiting */</span></span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; SPDK_BDEV_QOS_NUM_RATE_LIMIT_TYPES; i++) &#123;</span><br><span class="line">        <span class="comment">/* We may have allowed the IOs or bytes to slightly overrun in the last</span></span><br><span class="line"><span class="comment">         * timeslice. remaining_this_timeslice is signed, so if it&#x27;s negative</span></span><br><span class="line"><span class="comment">         * here, we&#x27;ll account for the overrun so that the next timeslice will</span></span><br><span class="line"><span class="comment">         * be appropriately reduced.</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">if</span> (qos-&gt;rate_limits[i].remaining_this_timeslice &gt; <span class="number">0</span>) &#123;</span><br><span class="line">            qos-&gt;rate_limits[i].remaining_this_timeslice = <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span> (now &gt;= (qos-&gt;last_timeslice + qos-&gt;timeslice_size)) &#123;</span><br><span class="line">        qos-&gt;last_timeslice += qos-&gt;timeslice_size;</span><br><span class="line">        <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; SPDK_BDEV_QOS_NUM_RATE_LIMIT_TYPES; i++) &#123;</span><br><span class="line">            qos-&gt;rate_limits[i].remaining_this_timeslice +=</span><br><span class="line">                qos-&gt;rate_limits[i].max_per_timeslice;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> bdev_qos_io_submit(qos-&gt;ch, qos);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Impact-of-Rate-Limiting-Strategies-on-Block-Devices"><a href="#Impact-of-Rate-Limiting-Strategies-on-Block-Devices" class="headerlink" title="Impact of Rate Limiting Strategies on Block Devices"></a>Impact of Rate Limiting Strategies on Block Devices</h2><p>Different QoS strategies result in different experiences for the upper-layer block device, mainly reflected in IO latency and <code>%util</code>.</p>
+<h3 id="Latency"><a href="#Latency" class="headerlink" title="Latency"></a>Latency</h3><p>Latency is determined by the burst performance and refill frequency of the QoS strategy.</p>
+<ul>
+<li><strong>Burst Performance</strong>: Configuring a larger leaky bucket or token bucket, or setting up two buckets like Qemu, can enhance the burst performance of the block device, resulting in lower latency when the block device handles burst traffic.<ul>
+<li>This can be tested using the fio command: <code>fio --group_reporting --rw=randwrite --bs=1M --numjobs=1 --iodepth=64 --ioengine=libaio --direct=1 --name test --size=2000G  --filename=/dev/vdb  -iodepth_low=0 -iodepth_batch_submit=64 -thinktime=950ms -thinktime_blocks=64</code>. This issues 1M IOs with a queue depth of 64 each time, waits 950ms after completion, and repeats. If the block device’s burst performance is poor, the observed phenomenon is high <code>iowait</code> latency and an inability to achieve high bandwidth. Furthermore, because we wait a long time between each IO issue, the io util is also low.</li>
+</ul>
+</li>
+<li><strong>Refill Frequency</strong>: A lower refill frequency can cause severe tail latency. For example, if the token bucket refills every 1 second, and if the IOs issued within that 1 second exceed the limit, then some IOs will inevitably experience latency exceeding 1 second, leading to high tail latency.</li>
+</ul>
+<h3 id="IO-util"><a href="#IO-util" class="headerlink" title="IO util"></a>IO util</h3><p>Disk util value is defined as the proportion of time the disk spends processing IOs relative to the total time. It is the ratio of the time the disk queue has IOs to the total time. If the rate limiting algorithm causes the IO processing time to be very evenly distributed (like <code>Leaky bucket as a queue</code>, where IOs are processed one by one intermittently), and the disk queue always has IOs, then the util naturally is high.</p>
+<p>For block devices configured with high burst performance, even very high queue depths can be processed quickly, resulting in naturally low Util.</p>
+<h3 id="Impact-on-Database-Applications"><a href="#Impact-on-Database-Applications" class="headerlink" title="Impact on Database Applications"></a>Impact on Database Applications</h3><p>Here we take the database MySQL built on distributed block devices as an example to discuss the impact of rate limiting strategies on SQL performance.</p>
+<p>In MySQL, there are mainly two parts of IO that significantly affect performance:</p>
+<ol>
+<li>Flushing Dirty Pages<ol>
+<li>To reduce the number of IOs and improve read&#x2F;write performance, MySQL introduces the <code>buffer pool</code>. Modifications to data in MySQL are first made in the buffer pool and flushed at an appropriate time. When the memory data page and the disk data page content are inconsistent, we call this memory page a “dirty page”. After the memory data is written to disk, the content of the memory and disk data pages becomes consistent, called a “clean page”.</li>
+<li>From the usage scenario, we can infer that each dirty page flush must involve large IOs and high queues. If the block device’s burst performance is poor, it will lead to slow dirty page flushing rates, and as mentioned above, this scenario is highly likely to have low ioutil. That is to say, this IO model does not leverage the performance of the rate limiting mechanism.</li>
+<li>The solutions are simple:<ol>
+<li>Reduce the queue depth (the size of each dirty page flush) to offset the limitation of insufficient burst performance.</li>
+<li>Increase the flush frequency to thereby improve ioutil and enhance the utilization of the rate limiting strategy.</li>
+</ol>
+</li>
+</ol>
+</li>
+<li>Flushing Redo-log. Bin-log is not discussed here because the official stance is that the performance loss from enabling bin-log is less than 1%.<ol>
+<li>Redo-log, to ensure correctness, is written sequentially by a single thread. If the block device’s burst performance is poor, it will cause high latency in issuing redo-log, dragging down the entire system’s TPS.</li>
+<li>If redo-log shares the same disk with other IOs, its own priority cannot be reflected, potentially increasing redo-log latency due to dirty page flushing triggering rate limiting.</li>
+<li>The solutions include the following:<ol>
+<li>Increase the block device’s burst capability.</li>
+<li>Elevate the priority of redo-log so that it is issued first. If the block device system does not support IO priorities, you can apply for another disk to be used exclusively for redo-log.</li>
+<li>The upper-layer MySQL application supports concurrently and randomly written redo-log (PolarDB should have already implemented this).</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+<h2 id="Reference-Links"><a href="#Reference-Links" class="headerlink" title="Reference Links"></a>Reference Links</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Token_bucket">Wiki Token bucket</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Leaky_bucket">Wiki Leaky bucket</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.csdn.net/weixin_28738021/article/details/112610541">Token Bucket Rate Limiting_Qemu and Librbd QoS Rate Limiting Mechanism Comparison and Algorithm Analysis</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/352213790">Written on the 10th Anniversary of Work</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/qemu/qemu/blob/master/docs/throttle.txt">qemu leaky bucket</a></li>
+<li><a target="_blank" rel="noopener" href="https://support.huaweicloud.com/intl/zh-cn/productdesc-evs/zh-cn_topic_0044524691.html">Huawei Cloud Disk EVS Burst Capability Introduction</a></li>
+<li><a target="_blank" rel="noopener" href="https://support.huaweicloud.com/intl/zh-cn/evs_faq/evs_faq_0019.html">How to Test Cloud Disk Performance</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.alibabacloud.com/help/zh/doc-detail/65077.htm">Stress Testing ESSD Cloud Disk IOPS Performance</a></li>
+<li><a target="_blank" rel="noopener" href="https://cloud.tencent.com/developer/news/626730">Rate Limiting Algorithm: Sliding Window Method</a></li>
+</ol>
+
+    </div>
+
+    
+    
+    
+        
+
+<div>
+<ul class="post-copyright">
+  <li class="post-copyright-author">
+    <strong>Post author:  </strong>Roland Qi
+  </li>
+  <li class="post-copyright-link">
+    <strong>Post link: </strong>
+    <a href="https://rolandqi.github.io/2023/05/11/Cloud-Block-Device-Flow-Control-Strategies/" title="Cloud Block Device Flow Control Strategies">https://rolandqi.github.io/2023/05/11/Cloud-Block-Device-Flow-Control-Strategies/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>Copyright Notice:  </strong>All articles in this blog are licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en" rel="noopener" target="_blank"><i class="fa fa-fw fa-creative-commons"></i>BY-NC-SA</a> unless stating additionally.
+  </li>
+</ul>
+</div>
+
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/disributed-system/" rel="tag"># disributed system</a>
+              <a href="/tags/block-device/" rel="tag"># block device</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/11/11/Will-Multiple-Link-Libraries-with-Same-Function-Names-Cause-Compilation-Errors-in-CC/" rel="prev" title="Will Multiple Link Libraries with Same Function Names Cause Compilation Errors in CC++">
+      <i class="fa fa-chevron-left"></i> Will Multiple Link Libraries with Same Function Names Cause Compilation Errors in CC++
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2023/05/14/What-is-SPDK-and-What-Scenarios-Require-It/" rel="next" title="What is SPDK, and What Scenarios Require It">
+      What is SPDK, and What Scenarios Require It <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#QoS-Rate-Limiting-Algorithms-Introduction"><span class="nav-number">1.</span> <span class="nav-text">QoS Rate Limiting Algorithms Introduction</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Token-Bucket"><span class="nav-number">1.1.</span> <span class="nav-text">Token Bucket</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Leaky-Bucket"><span class="nav-number">1.2.</span> <span class="nav-text">Leaky Bucket</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#Leaky-bucket-as-a-meter"><span class="nav-number">1.2.1.</span> <span class="nav-text">Leaky bucket as a meter</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Leaky-bucket-as-a-queue"><span class="nav-number">1.2.2.</span> <span class="nav-text">Leaky bucket as a queue</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Mainstream-Block-Device-Flow-Control-Solutions"><span class="nav-number">2.</span> <span class="nav-text">Mainstream Block Device Flow Control Solutions</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Qemu"><span class="nav-number">2.1.</span> <span class="nav-text">Qemu</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#librbd"><span class="nav-number">2.2.</span> <span class="nav-text">librbd</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#spdk"><span class="nav-number">2.3.</span> <span class="nav-text">spdk</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Impact-of-Rate-Limiting-Strategies-on-Block-Devices"><span class="nav-number">3.</span> <span class="nav-text">Impact of Rate Limiting Strategies on Block Devices</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Latency"><span class="nav-number">3.1.</span> <span class="nav-text">Latency</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#IO-util"><span class="nav-number">3.2.</span> <span class="nav-text">IO util</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Impact-on-Database-Applications"><span class="nav-number">3.3.</span> <span class="nav-text">Impact on Database Applications</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Reference-Links"><span class="nav-number">4.</span> <span class="nav-text">Reference Links</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Roland Qi</p>
+  <div class="site-description" itemprop="description">my thinking of distributed system, database, computer architecture, deep learning and more.</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">4</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">tags</span>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2025</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Roland Qi</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a>
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

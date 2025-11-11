@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+  <link rel="mask-icon" href="/images/safari-pinned-tab.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"rolandqi.github.io","root":"/","scheme":"Gemini","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="1. IntroductionThere are already many articles about SPDK benifits. This article will not delve deeply into specific technical details; regarding specific technical implementations, I will place them">
+<meta property="og:type" content="article">
+<meta property="og:title" content="What is SPDK, and What Scenarios Require It">
+<meta property="og:url" content="https://rolandqi.github.io/2023/05/14/What-is-SPDK-and-What-Scenarios-Require-It/index.html">
+<meta property="og:site_name" content="Roland&#39;s Programmig Thinking">
+<meta property="og:description" content="1. IntroductionThere are already many articles about SPDK benifits. This article will not delve deeply into specific technical details; regarding specific technical implementations, I will place them">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2023-05-14T12:39:50.000Z">
+<meta property="article:modified_time" content="2025-11-11T05:21:08.696Z">
+<meta property="article:author" content="Roland Qi">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="https://rolandqi.github.io/2023/05/14/What-is-SPDK-and-What-Scenarios-Require-It/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'en'
+  };
+</script>
+
+  <title>What is SPDK, and What Scenarios Require It | Roland's Programmig Thinking</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">Roland's Programmig Thinking</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="en">
+    <link itemprop="mainEntityOfPage" href="https://rolandqi.github.io/2023/05/14/What-is-SPDK-and-What-Scenarios-Require-It/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Roland Qi">
+      <meta itemprop="description" content="my thinking of distributed system, database, computer architecture, deep learning and more.">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Roland's Programmig Thinking">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          What is SPDK, and What Scenarios Require It
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2023-05-14 12:39:50" itemprop="dateCreated datePublished" datetime="2023-05-14T12:39:50+00:00">2023-05-14</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2025-11-11 05:21:08" itemprop="dateModified" datetime="2025-11-11T05:21:08+00:00">2025-11-11</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="1-Introduction"><a href="#1-Introduction" class="headerlink" title="1. Introduction"></a>1. Introduction</h2><p>There are already many articles about SPDK benifits. This article will not delve deeply into specific technical details; regarding specific technical implementations, I will place them in the reference links at the end.</p>
+<h2 id="2-What-is-SPDK"><a href="#2-What-is-SPDK" class="headerlink" title="2. What is SPDK"></a>2. What is SPDK</h2><p>First, it must be clear that SPDK is a framework, not a distributed system. The foundation of SPDK (the official website uses the word ‘bedrock’) is a user space, polled-mode, asynchronous, lockless NVMe driver that provides zero-copy, high concurrency direct access to SSDs from user space. Its initial purpose was to optimize block storage write operations. However, with the continuous evolution of SPDK, people discovered that SPDK can optimize various aspects of the storage software stack.</p>
+<p>Many distributed storage systems are considering how to incorporate the SPDK framework, or adopt the high-performance storage technology represented by SPDK to optimize the entire IO path.</p>
+<h2 id="3-SPDK-Design-Philosophy"><a href="#3-SPDK-Design-Philosophy" class="headerlink" title="3. SPDK Design Philosophy"></a>3. SPDK Design Philosophy</h2><p>SPDK mainly achieves its high-performance solution by introducing the following technologies:</p>
+<ol>
+<li>Moving storage-related drivers to user space to avoid performance loss caused by system calls, and incidentally enabling zero-copy by directly using user space memory for write operations.</li>
+<li>Using polling mode<ol>
+<li>Polling hardware queues, unlike the previous interrupt mode which brought unstable performance and latency increases.</li>
+<li>Any business can register a polling function as a poller in the SPDK thread. After registration, this function will be executed periodically in SPDK, avoiding the overhead caused by event notification mechanisms like <code>epoll</code>.</li>
+</ol>
+</li>
+<li>Avoiding the use of locks in the IO path. Using lock-free queues to pass messages&#x2F;IO.<ul>
+<li>One of the main design goals of SPDK is to achieve linear performance improvement as hardware (e.g. SSD, NIC, CPU) increases. To achieve this goal, SPDK designers must eliminate the overhead caused by using more system resources, such as: more threads, inter-process communication, accessing more storage hardware, and network cards.</li>
+<li>To reduce this performance overhead, SPDK introduced lock-free queues, using lock-free programming to avoid the performance loss caused by locks.</li>
+<li>SPDK’s lock-free queues mainly rely on DPDK’s implementation, which essentially uses CAS (Compare and Swap) to implement a multi-producer multi-consumer FIFO queue. For the implementation of lock-free queues, you can refer to <a target="_blank" rel="noopener" href="https://blog.csdn.net/chen98765432101/article/details/69367633">this article</a>.</li>
+</ul>
+</li>
+</ol>
+<p>In simple terms, the SPDK runtime occupies specified CPU cores fully; its essence is a large while infinite loop that occupies a CPU core completely. It continuously runs user-specified pollers, polling queues, network interfaces, etc. Therefore, the most basic principle of SPDK programming is to avoid process context switches on SPDK cores. This would break SPDK’s high-performance framework, causing performance degradation or even failure to work.</p>
+<p>Process context switches can occur for many reasons, roughly listed as follows. We must avoid them when programming with SPDK. I once encountered a situation where an inconspicuous system call <code>mmap</code> in the SPDK thread entered the kernel, causing the entire SPDK process to become unserviceable until it crashed.</p>
+<ul>
+<li>CPU time slice exhaustion.</li>
+<li>When a process has insufficient system resources (such as insufficient memory), it must wait until resources are met before it can run. During this time, the process will also be suspended, and the system will schedule other processes to run.</li>
+<li>When a higher priority process needs to run, to ensure the operation of the high-priority process, the current process will be suspended, and the high-priority process will run.</li>
+<li>Hardware interrupts will cause the process on the CPU to be suspended, switching to execute the kernel’s interrupt service routine.</li>
+</ul>
+<h2 id="4-Using-SPDK-to-Accelerate-NVMe-Storage"><a href="#4-Using-SPDK-to-Accelerate-NVMe-Storage" class="headerlink" title="4. Using SPDK to Accelerate NVMe Storage"></a>4. Using SPDK to Accelerate NVMe Storage</h2><p>SPDK aims to directly access <code>NVMe SSD</code> from user space, bypassing the kernel NVMe driver.</p>
+<p>SPDK unbinds the <code>NVMe SSD</code> from the kernel driver and binds it to the VFIO or UIO driver. Although these two drivers themselves do not perform any initialization operations on the NVMe device, they give SPDK the ability to directly access the NVMe device. Subsequent initialization and command issuance are all handled by SPDK. Therefore, SPDK’s access to <code>NVMe SSD</code> calls are basically corresponding to NVMe commands, such as admin cmd <code>spdk_nvme_ctrlr_cmd_set_feature</code>, <code>spdk_nvme_ctrlr_cmd_get_log_page</code>, and io cmd <code>spdk_nvme_ctrlr_alloc_io_qpair</code>, <code>spdk_nvme_ns_cmd_read</code>, etc. Of course, io_uring is already somewhat similar to the io cmd mentioned here :)</p>
+<h2 id="5-SPDK-Bdev"><a href="#5-SPDK-Bdev" class="headerlink" title="5. SPDK Bdev"></a>5. SPDK Bdev</h2><p>Based on the above accelerated access to NVMe storage, SPDK provides a block device (bdev) software stack. This block device is not the block device in the Linux system; the block device in SPDK is just an interface layer abstracted by software.</p>
+<p>SPDK has already provided various bdevs to meet different backend storage methods and testing requirements. Such as NVMe (NVMe bdev includes both NVMe physical disks and NVMe-oF), memory (malloc bdev), no write operation directly returns (null bdev), etc. Users can also customize their own bdev. &zwnj;<strong>A very common way to use SPDK is</strong>&zwnj; for users to define their own bdev to access their distributed storage cluster.</p>
+<p>Through the bdev interface layer, SPDK unifies the calling methods of block devices. Users can use various bdevs by adding different block devices to the SPDK process through different RPCs without modifying the code. Moreover, it is very simple for users to add their own bdev, which greatly expands the applicable scenarios of SPDK.</p>
+<p>At this point, students should understand that SPDK’s current application scenarios are mainly targeted at block storage. It can be said that block storage is the foundation of the entire storage system. On top of it, we have built various file storage, object storage, table storage, databases, etc. We can, like various cloud-native databases, build upper-layer distributed systems directly on distributed block storage and object storage. We can also push down metadata and indexes that other storage needs to manage to the block layer, directly using SPDK to optimize upper-layer storage. For example, current block storage uses LBA as the index granularity for management. We can change the index to files&#x2F;objects and build file&#x2F;object storage systems on top of them.</p>
+<h2 id="6-SPDK-Applications"><a href="#6-SPDK-Applications" class="headerlink" title="6. SPDK Applications"></a>6. SPDK Applications</h2><p>The most direct way to use SPDK is as a storage engine to accelerate access to <code>NVMe SSD</code>. On top of this, SPDK has abstracted the bdev layer. Various businesses can expose block storage devices to users in some way by binding to bdev. This is what we will discuss next regarding various application scenarios.</p>
+<p>The purpose of enterprises using block storage is to expose backend storage (which can be local disks or distributed storage clusters) to users. Its implementation forms, such as public clouds, private clouds, etc., we will not discuss for now. In terms of presentation methods alone, we have many ways to expose this block device to users. I have mainly encountered the following types:</p>
+<ol>
+<li>Using network storage protocols such as iSCSI&#x2F;NBD&#x2F;NVMe-oF, establishing a client (called initiator in iscsi&#x2F;nvmeof protocols) on the user’s host machine to access the block device.</li>
+<li>Through virtio virtualization, providing some type of block device on the host OS to virtual machines. Among these, different device types correspond to different drivers, and their IO paths also vary, such as vhost-user-blk, vfio-pci, virtio-blk, etc.</li>
+<li>Bare-metal&#x2F;smart-NIC&#x2F;DPU by establishing PF&#x2F;VF, simulating NVMe&#x2F;virtio block devices.</li>
+</ol>
+<p>For the first two methods, SPDK provides corresponding backend drivers, such as <code>iSCSI target</code>, <code>NVMe-oF target</code>, <code>vhost target</code>, etc. The third method varies in specific implementation details among different vendors and may not be open source. We use SPDK as the backend driver for these methods to receive IO from clients and process it. The advantage is that we can leverage SPDK’s high-performance storage framework, which is the previously mentioned <code>user space</code>, <code>polled-mode</code>, <code>asynchronous</code>, <code>lockless</code>. The SPDK official website has many test documents comparing the performance of SPDK with other open-source implementations, which is still quite considerable.</p>
+<h2 id="7-Summary"><a href="#7-Summary" class="headerlink" title="7. Summary"></a>7. Summary</h2><p>I’m using SPDK for two years and is generally quite satisfied. The SPDK community provides various means for everyone to communicate. The SPDK China team also frequently publishes technical articles, technical videos, etc. Moreover, SPDK has been continuously evolving, absorbing and supporting various software and hardware new features. By learning SPDK, we can be exposed to various aspects of the storage technology stack. Therefore, I believe that as a storage professional, whether or not you use SPDK in your work, you must understand the various high-performance storage technologies behind SPDK.</p>
+<h2 id="Network-Stack"><a href="#Network-Stack" class="headerlink" title="Network Stack"></a>Network Stack</h2><p>SPDK covers the entire path from front-end to network transmission to back-end write operations.</p>
+<h2 id="8-Reference-Links"><a href="#8-Reference-Links" class="headerlink" title="8. Reference Links"></a>8. Reference Links</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://spdk.io/doc/index.html">Storage Performance Development Kits</a> SPDK official documentation</li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/69629212">Virtualization Technology - Overview [Part 1]</a></li>
+<li><a target="_blank" rel="noopener" href="https://ci.spdk.io/download/performance-reports/SPDK_rdma_perf_report_2001.pdf">20.01 SPDK NVMe-oF RDMA Performance Report</a></li>
+</ol>
+
+    </div>
+
+    
+    
+    
+        
+
+<div>
+<ul class="post-copyright">
+  <li class="post-copyright-author">
+    <strong>Post author:  </strong>Roland Qi
+  </li>
+  <li class="post-copyright-link">
+    <strong>Post link: </strong>
+    <a href="https://rolandqi.github.io/2023/05/14/What-is-SPDK-and-What-Scenarios-Require-It/" title="What is SPDK, and What Scenarios Require It">https://rolandqi.github.io/2023/05/14/What-is-SPDK-and-What-Scenarios-Require-It/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>Copyright Notice:  </strong>All articles in this blog are licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en" rel="noopener" target="_blank"><i class="fa fa-fw fa-creative-commons"></i>BY-NC-SA</a> unless stating additionally.
+  </li>
+</ul>
+</div>
+
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2023/05/11/Cloud-Block-Device-Flow-Control-Strategies/" rel="prev" title="Cloud Block Device Flow Control Strategies">
+      <i class="fa fa-chevron-left"></i> Cloud Block Device Flow Control Strategies
+    </a></div>
+      <div class="post-nav-item"></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-Introduction"><span class="nav-number">1.</span> <span class="nav-text">1. Introduction</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-What-is-SPDK"><span class="nav-number">2.</span> <span class="nav-text">2. What is SPDK</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-SPDK-Design-Philosophy"><span class="nav-number">3.</span> <span class="nav-text">3. SPDK Design Philosophy</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-Using-SPDK-to-Accelerate-NVMe-Storage"><span class="nav-number">4.</span> <span class="nav-text">4. Using SPDK to Accelerate NVMe Storage</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-SPDK-Bdev"><span class="nav-number">5.</span> <span class="nav-text">5. SPDK Bdev</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-SPDK-Applications"><span class="nav-number">6.</span> <span class="nav-text">6. SPDK Applications</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-Summary"><span class="nav-number">7.</span> <span class="nav-text">7. Summary</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Network-Stack"><span class="nav-number">8.</span> <span class="nav-text">Network Stack</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#8-Reference-Links"><span class="nav-number">9.</span> <span class="nav-text">8. Reference Links</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Roland Qi</p>
+  <div class="site-description" itemprop="description">my thinking of distributed system, database, computer architecture, deep learning and more.</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">4</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">tags</span>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2025</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Roland Qi</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a>
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

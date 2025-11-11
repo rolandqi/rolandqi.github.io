@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 6.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+  <link rel="mask-icon" href="/images/safari-pinned-tab.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"rolandqi.github.io","root":"/","scheme":"Gemini","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="BackgroundDue to business requirements, our company uses a closed-source C++ program from Mellanox. Mellanox’s recommended customization approach is to perform custom development on the dynamically li">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Will Multiple Link Libraries with Same Function Names Cause Compilation Errors in CC++">
+<meta property="og:url" content="https://rolandqi.github.io/2022/11/11/Will-Multiple-Link-Libraries-with-Same-Function-Names-Cause-Compilation-Errors-in-CC/index.html">
+<meta property="og:site_name" content="Roland&#39;s Programmig Thinking">
+<meta property="og:description" content="BackgroundDue to business requirements, our company uses a closed-source C++ program from Mellanox. Mellanox’s recommended customization approach is to perform custom development on the dynamically li">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2022-11-11T12:09:11.000Z">
+<meta property="article:modified_time" content="2025-11-11T05:21:08.696Z">
+<meta property="article:author" content="Roland Qi">
+<meta property="article:tag" content="C++">
+<meta property="article:tag" content="GCC">
+<meta property="article:tag" content="Linking">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="https://rolandqi.github.io/2022/11/11/Will-Multiple-Link-Libraries-with-Same-Function-Names-Cause-Compilation-Errors-in-CC/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'en'
+  };
+</script>
+
+  <title>Will Multiple Link Libraries with Same Function Names Cause Compilation Errors in CC++ | Roland's Programmig Thinking</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">Roland's Programmig Thinking</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>Archives</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>About</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="en">
+    <link itemprop="mainEntityOfPage" href="https://rolandqi.github.io/2022/11/11/Will-Multiple-Link-Libraries-with-Same-Function-Names-Cause-Compilation-Errors-in-CC/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Roland Qi">
+      <meta itemprop="description" content="my thinking of distributed system, database, computer architecture, deep learning and more.">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Roland's Programmig Thinking">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Will Multiple Link Libraries with Same Function Names Cause Compilation Errors in CC++
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2022-11-11 12:09:11" itemprop="dateCreated datePublished" datetime="2022-11-11T12:09:11+00:00">2022-11-11</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2025-11-11 05:21:08" itemprop="dateModified" datetime="2025-11-11T05:21:08+00:00">2025-11-11</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="Background"><a href="#Background" class="headerlink" title="Background"></a>Background</h2><p>Due to business requirements, our company uses a closed-source C++ program from Mellanox. Mellanox’s recommended customization approach is to perform custom development on the dynamically linked libraries to add additional functionality.</p>
+<p>During the solution discussion phase, I found that many colleagues were not very clear about the meanings represented by dynamic&#x2F;static libraries, ‌especially when same-name functions exist‌. There was also no clear understanding of what the compilation, linking, and runtime results would be, hence this article was written.</p>
+<h2 id="Basic-Concepts"><a href="#Basic-Concepts" class="headerlink" title="Basic Concepts"></a>Basic Concepts</h2><p>Program function libraries can be divided into the following types:</p>
+<p>‌1. <strong>Static libraries</strong>‌: During compile-time, static libraries are entirely copied into the compilation target, typically existing as .a files<br>‌2. <strong>Shared libraries‌</strong>: Loaded into the program when it starts, they can be shared by different programs, typically existing as <code>.so</code> files<br>‌Dynamically loaded libraries‌: During process runtime, use functions from dlfcn.h to load, call, and close dynamic libraries</p>
+<p>##Testing Same-name Functions</p>
+<p>Using two <code>.c</code> files <code>test1.c</code> and <code>test2.c</code> containing the same-name function void test()</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// test1.c</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">test</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;call from test1.c&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// test2.c</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">test</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;call from test2.c&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>File containing the main function main.c</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// main.c</span></span><br><span class="line"><span class="function"><span class="keyword">extern</span> <span class="type">void</span> <span class="title">test</span><span class="params">()</span></span>;</span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="built_in">test</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Test-1-o-Object-Files"><a href="#Test-1-o-Object-Files" class="headerlink" title="Test 1: .o Object Files"></a>Test 1: <code>.o</code> Object Files</h3><p>Using the following command line, generate object files from test1.c and test2.c, and compile the executable:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">gcc -c ./test1.c</span><br><span class="line">gcc -c ./test2.c</span><br><span class="line">gcc -o main ./test1.o ./test2.o ./main.c</span><br></pre></td></tr></table></figure>
+
+<p>Resulting in error:</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">./test2.o: In function `test&#x27;:</span><br><span class="line">test2.c:(.text+0x0): multiple definition of `test&#x27;</span><br><span class="line">./test1.o:test1.c:(.text+0x0): first defined here</span><br><span class="line">collect2: error: ld returned 1 exit status</span><br></pre></td></tr></table></figure>
+
+<p>As we can see, linking object files containing same-name functions in the same namespace will result in a multiple definition error.</p>
+<h3 id="Test-2-Static-Libraries"><a href="#Test-2-Static-Libraries" class="headerlink" title="Test 2: Static Libraries"></a>Test 2: Static Libraries</h3><p>Using the following command line to compile static libraries libtest1.a and libtest2.a:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">g++ -c ./test1.c</span><br><span class="line">g++ -c ./test2.c</span><br><span class="line">ar crv libtest1.a test1.o</span><br><span class="line">ar crv libtest2.a test2.o</span><br></pre></td></tr></table></figure>
+
+<p>Then we link and compile:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">gcc -L. ./main.c -ltest1 -ltest2 -o main</span><br></pre></td></tr></table></figure>
+
+<p>Compilation succeeds without errors. Execution result:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ LD_LIBRARY_PATH=. ./main</span><br><span class="line">call from test1.c</span><br></pre></td></tr></table></figure>
+
+<p>Some might ask: “Why no error? I clearly linked two static libraries containing same-name functions into the same executable.”</p>
+<p>To investigate why no error occurred, let’s add the ld option <code>-Wl,--verbose</code> to see what exactly happens during linking. Re-executing compilation, we get the output:</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">...</span><br><span class="line"></span><br><span class="line">attempt to open ./libtest1.so failed</span><br><span class="line">attempt to open ./libtest1.a succeeded</span><br><span class="line">(./libtest1.a)test1.o</span><br><span class="line">attempt to open ./libtest2.so failed</span><br><span class="line">attempt to open ./libtest2.a succeeded</span><br><span class="line"></span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+<p>We can discover that in the final linking result, the output binary only linked the <code>test1.o</code> file from <code>libtest1.a</code>, but did not link <code>libtest2.a</code>. The compiler’s behavior means:</p>
+<ol>
+<li>The compiler searches link libraries sequentially according to linking order.</li>
+<li>First, it finds <code>libtest1.a</code> and discovers it has the function void test() needed by the main function, so it links it.</li>
+<li>When scanning to <code>libtest2.a</code>, since <code>void test()</code> is already provided by the symbol from <code>libtest1.a</code>, it’s no longer linked.<br>A question on <a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/55130965/when-and-why-would-the-c-linker-exclude-unused-symbols">Stack Overflow</a> also discusses this point.</li>
+</ol>
+<p>If we use the ld parameter <code>--whole-archive</code> to forcibly link <code>libtest1.a</code> and <code>libtest2.a</code>, we’ll see the same error as in Test 1:</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ gcc -L. ./main.c -Wl,--whole-archive -ltest1 -ltest2 -Wl,--no-whole-archive -o main</span><br><span class="line">./libtest2.a(test2.o): In function `test&#x27;:</span><br><span class="line">test2.c:(.text+0x0): multiple definition of `test&#x27;</span><br><span class="line">./libtest1.a(test1.o):test1.c:(.text+0x0): first defined here</span><br><span class="line">collect2: error: ld returned 1 exit status</span><br></pre></td></tr></table></figure>
+
+<h3 id="Test-3-Dynamic-Libraries"><a href="#Test-3-Dynamic-Libraries" class="headerlink" title="Test 3: Dynamic Libraries"></a>Test 3: Dynamic Libraries</h3><p>Using the following command line to compile dynamic libraries <code>libtest1.so</code> and <code>libtest2.so</code> and compile the executable:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">gcc -shared -fPIC -o libtest1.so test1.c</span><br><span class="line">gcc -shared -fPIC -o libtest2.so test2.c</span><br><span class="line">gcc -L. ./main.c -ltest1 -ltest2 -o main</span><br></pre></td></tr></table></figure>
+
+<p>Compilation succeeds without errors. Checking with ldd confirms that both libtest1.so and libtest2.so are indeed linked into the main executable. Execution result:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ LD_LIBRARY_PATH=. ./main</span><br><span class="line">call from test1.c</span><br></pre></td></tr></table></figure>
+
+<p>This shows that during dynamic linking, different link libraries can have same-name functions without affecting compilation. This is determined by the nature of dynamic link libraries, which are only dynamically loaded at runtime, and the loading order is determined by the linking order during compilation. This means symbols are resolved on a first match basis.</p>
+<p>We can also use <code>LD_PRELOAD</code> to <a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/426230/what-is-the-ld-preload-trick">preload</a> a certain dynamic library into memory.</p>
+<h2 id="Applications-of-Same-name-Functions"><a href="#Applications-of-Same-name-Functions" class="headerlink" title="Applications of Same-name Functions"></a>Applications of Same-name Functions</h2><p>Some might question: Can it be used in daily work? The answer is definitely yes.</p>
+<p>The simplest application scenario: for example, if there’s a function in an open-source library that I don’t like, and I want to write my own version to replace it, I can completely use the above knowledge to link my implemented function into the executable file dynamically or statically, replacing the version I don’t like.</p>
+<p>Common industrial applications include:</p>
+<p>‌1. Library Replacement‌: The famous <code>tcmalloc</code> operates in this way. We link tcmalloc into the program, and as long as the tcmalloc library’s search order precedes libc, we can replace the native memory management functions with the tcmalloc version.<br>‌2. Mock Testing‌: Chen Shuo detailed in an article how to mock system calls in C++ unit testing. The ‌<strong>link seams‌</strong> method utilizes the characteristic that libc is generally dynamically linked to mock system calls in the process.</p>
+
+    </div>
+
+    
+    
+    
+        
+
+<div>
+<ul class="post-copyright">
+  <li class="post-copyright-author">
+    <strong>Post author:  </strong>Roland Qi
+  </li>
+  <li class="post-copyright-link">
+    <strong>Post link: </strong>
+    <a href="https://rolandqi.github.io/2022/11/11/Will-Multiple-Link-Libraries-with-Same-Function-Names-Cause-Compilation-Errors-in-CC/" title="Will Multiple Link Libraries with Same Function Names Cause Compilation Errors in CC++">https://rolandqi.github.io/2022/11/11/Will-Multiple-Link-Libraries-with-Same-Function-Names-Cause-Compilation-Errors-in-CC/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>Copyright Notice:  </strong>All articles in this blog are licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en" rel="noopener" target="_blank"><i class="fa fa-fw fa-creative-commons"></i>BY-NC-SA</a> unless stating additionally.
+  </li>
+</ul>
+</div>
+
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/C/" rel="tag"># C++</a>
+              <a href="/tags/GCC/" rel="tag"># GCC</a>
+              <a href="/tags/Linking/" rel="tag"># Linking</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2022/09/25/How-to-Manage-Memory-Alignment-in-Modern-C/" rel="prev" title="How to Manage Memory Alignment in Modern C++">
+      <i class="fa fa-chevron-left"></i> How to Manage Memory Alignment in Modern C++
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2023/05/11/Cloud-Block-Device-Flow-Control-Strategies/" rel="next" title="Cloud Block Device Flow Control Strategies">
+      Cloud Block Device Flow Control Strategies <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Background"><span class="nav-number">1.</span> <span class="nav-text">Background</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Basic-Concepts"><span class="nav-number">2.</span> <span class="nav-text">Basic Concepts</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Test-1-o-Object-Files"><span class="nav-number">2.1.</span> <span class="nav-text">Test 1: .o Object Files</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Test-2-Static-Libraries"><span class="nav-number">2.2.</span> <span class="nav-text">Test 2: Static Libraries</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Test-3-Dynamic-Libraries"><span class="nav-number">2.3.</span> <span class="nav-text">Test 3: Dynamic Libraries</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Applications-of-Same-name-Functions"><span class="nav-number">3.</span> <span class="nav-text">Applications of Same-name Functions</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Roland Qi</p>
+  <div class="site-description" itemprop="description">my thinking of distributed system, database, computer architecture, deep learning and more.</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">4</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">tags</span>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2025</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Roland Qi</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a>
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>

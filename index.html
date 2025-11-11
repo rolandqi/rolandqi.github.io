@@ -152,6 +152,506 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="en">
+    <link itemprop="mainEntityOfPage" href="https://rolandqi.github.io/2023/05/14/What-is-SPDK-and-What-Scenarios-Require-It/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Roland Qi">
+      <meta itemprop="description" content="my thinking of distributed system, database, computer architecture, deep learning and more.">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Roland's Programmig Thinking">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2023/05/14/What-is-SPDK-and-What-Scenarios-Require-It/" class="post-title-link" itemprop="url">What is SPDK, and What Scenarios Require It</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2023-05-14 12:39:50" itemprop="dateCreated datePublished" datetime="2023-05-14T12:39:50+00:00">2023-05-14</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2025-11-11 05:21:08" itemprop="dateModified" datetime="2025-11-11T05:21:08+00:00">2025-11-11</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h2 id="1-Introduction"><a href="#1-Introduction" class="headerlink" title="1. Introduction"></a>1. Introduction</h2><p>There are already many articles about SPDK benifits. This article will not delve deeply into specific technical details; regarding specific technical implementations, I will place them in the reference links at the end.</p>
+<h2 id="2-What-is-SPDK"><a href="#2-What-is-SPDK" class="headerlink" title="2. What is SPDK"></a>2. What is SPDK</h2><p>First, it must be clear that SPDK is a framework, not a distributed system. The foundation of SPDK (the official website uses the word ‘bedrock’) is a user space, polled-mode, asynchronous, lockless NVMe driver that provides zero-copy, high concurrency direct access to SSDs from user space. Its initial purpose was to optimize block storage write operations. However, with the continuous evolution of SPDK, people discovered that SPDK can optimize various aspects of the storage software stack.</p>
+<p>Many distributed storage systems are considering how to incorporate the SPDK framework, or adopt the high-performance storage technology represented by SPDK to optimize the entire IO path.</p>
+<h2 id="3-SPDK-Design-Philosophy"><a href="#3-SPDK-Design-Philosophy" class="headerlink" title="3. SPDK Design Philosophy"></a>3. SPDK Design Philosophy</h2><p>SPDK mainly achieves its high-performance solution by introducing the following technologies:</p>
+<ol>
+<li>Moving storage-related drivers to user space to avoid performance loss caused by system calls, and incidentally enabling zero-copy by directly using user space memory for write operations.</li>
+<li>Using polling mode<ol>
+<li>Polling hardware queues, unlike the previous interrupt mode which brought unstable performance and latency increases.</li>
+<li>Any business can register a polling function as a poller in the SPDK thread. After registration, this function will be executed periodically in SPDK, avoiding the overhead caused by event notification mechanisms like <code>epoll</code>.</li>
+</ol>
+</li>
+<li>Avoiding the use of locks in the IO path. Using lock-free queues to pass messages&#x2F;IO.<ul>
+<li>One of the main design goals of SPDK is to achieve linear performance improvement as hardware (e.g. SSD, NIC, CPU) increases. To achieve this goal, SPDK designers must eliminate the overhead caused by using more system resources, such as: more threads, inter-process communication, accessing more storage hardware, and network cards.</li>
+<li>To reduce this performance overhead, SPDK introduced lock-free queues, using lock-free programming to avoid the performance loss caused by locks.</li>
+<li>SPDK’s lock-free queues mainly rely on DPDK’s implementation, which essentially uses CAS (Compare and Swap) to implement a multi-producer multi-consumer FIFO queue. For the implementation of lock-free queues, you can refer to <a target="_blank" rel="noopener" href="https://blog.csdn.net/chen98765432101/article/details/69367633">this article</a>.</li>
+</ul>
+</li>
+</ol>
+<p>In simple terms, the SPDK runtime occupies specified CPU cores fully; its essence is a large while infinite loop that occupies a CPU core completely. It continuously runs user-specified pollers, polling queues, network interfaces, etc. Therefore, the most basic principle of SPDK programming is to avoid process context switches on SPDK cores. This would break SPDK’s high-performance framework, causing performance degradation or even failure to work.</p>
+<p>Process context switches can occur for many reasons, roughly listed as follows. We must avoid them when programming with SPDK. I once encountered a situation where an inconspicuous system call <code>mmap</code> in the SPDK thread entered the kernel, causing the entire SPDK process to become unserviceable until it crashed.</p>
+<ul>
+<li>CPU time slice exhaustion.</li>
+<li>When a process has insufficient system resources (such as insufficient memory), it must wait until resources are met before it can run. During this time, the process will also be suspended, and the system will schedule other processes to run.</li>
+<li>When a higher priority process needs to run, to ensure the operation of the high-priority process, the current process will be suspended, and the high-priority process will run.</li>
+<li>Hardware interrupts will cause the process on the CPU to be suspended, switching to execute the kernel’s interrupt service routine.</li>
+</ul>
+<h2 id="4-Using-SPDK-to-Accelerate-NVMe-Storage"><a href="#4-Using-SPDK-to-Accelerate-NVMe-Storage" class="headerlink" title="4. Using SPDK to Accelerate NVMe Storage"></a>4. Using SPDK to Accelerate NVMe Storage</h2><p>SPDK aims to directly access <code>NVMe SSD</code> from user space, bypassing the kernel NVMe driver.</p>
+<p>SPDK unbinds the <code>NVMe SSD</code> from the kernel driver and binds it to the VFIO or UIO driver. Although these two drivers themselves do not perform any initialization operations on the NVMe device, they give SPDK the ability to directly access the NVMe device. Subsequent initialization and command issuance are all handled by SPDK. Therefore, SPDK’s access to <code>NVMe SSD</code> calls are basically corresponding to NVMe commands, such as admin cmd <code>spdk_nvme_ctrlr_cmd_set_feature</code>, <code>spdk_nvme_ctrlr_cmd_get_log_page</code>, and io cmd <code>spdk_nvme_ctrlr_alloc_io_qpair</code>, <code>spdk_nvme_ns_cmd_read</code>, etc. Of course, io_uring is already somewhat similar to the io cmd mentioned here :)</p>
+<h2 id="5-SPDK-Bdev"><a href="#5-SPDK-Bdev" class="headerlink" title="5. SPDK Bdev"></a>5. SPDK Bdev</h2><p>Based on the above accelerated access to NVMe storage, SPDK provides a block device (bdev) software stack. This block device is not the block device in the Linux system; the block device in SPDK is just an interface layer abstracted by software.</p>
+<p>SPDK has already provided various bdevs to meet different backend storage methods and testing requirements. Such as NVMe (NVMe bdev includes both NVMe physical disks and NVMe-oF), memory (malloc bdev), no write operation directly returns (null bdev), etc. Users can also customize their own bdev. &zwnj;<strong>A very common way to use SPDK is</strong>&zwnj; for users to define their own bdev to access their distributed storage cluster.</p>
+<p>Through the bdev interface layer, SPDK unifies the calling methods of block devices. Users can use various bdevs by adding different block devices to the SPDK process through different RPCs without modifying the code. Moreover, it is very simple for users to add their own bdev, which greatly expands the applicable scenarios of SPDK.</p>
+<p>At this point, students should understand that SPDK’s current application scenarios are mainly targeted at block storage. It can be said that block storage is the foundation of the entire storage system. On top of it, we have built various file storage, object storage, table storage, databases, etc. We can, like various cloud-native databases, build upper-layer distributed systems directly on distributed block storage and object storage. We can also push down metadata and indexes that other storage needs to manage to the block layer, directly using SPDK to optimize upper-layer storage. For example, current block storage uses LBA as the index granularity for management. We can change the index to files&#x2F;objects and build file&#x2F;object storage systems on top of them.</p>
+<h2 id="6-SPDK-Applications"><a href="#6-SPDK-Applications" class="headerlink" title="6. SPDK Applications"></a>6. SPDK Applications</h2><p>The most direct way to use SPDK is as a storage engine to accelerate access to <code>NVMe SSD</code>. On top of this, SPDK has abstracted the bdev layer. Various businesses can expose block storage devices to users in some way by binding to bdev. This is what we will discuss next regarding various application scenarios.</p>
+<p>The purpose of enterprises using block storage is to expose backend storage (which can be local disks or distributed storage clusters) to users. Its implementation forms, such as public clouds, private clouds, etc., we will not discuss for now. In terms of presentation methods alone, we have many ways to expose this block device to users. I have mainly encountered the following types:</p>
+<ol>
+<li>Using network storage protocols such as iSCSI&#x2F;NBD&#x2F;NVMe-oF, establishing a client (called initiator in iscsi&#x2F;nvmeof protocols) on the user’s host machine to access the block device.</li>
+<li>Through virtio virtualization, providing some type of block device on the host OS to virtual machines. Among these, different device types correspond to different drivers, and their IO paths also vary, such as vhost-user-blk, vfio-pci, virtio-blk, etc.</li>
+<li>Bare-metal&#x2F;smart-NIC&#x2F;DPU by establishing PF&#x2F;VF, simulating NVMe&#x2F;virtio block devices.</li>
+</ol>
+<p>For the first two methods, SPDK provides corresponding backend drivers, such as <code>iSCSI target</code>, <code>NVMe-oF target</code>, <code>vhost target</code>, etc. The third method varies in specific implementation details among different vendors and may not be open source. We use SPDK as the backend driver for these methods to receive IO from clients and process it. The advantage is that we can leverage SPDK’s high-performance storage framework, which is the previously mentioned <code>user space</code>, <code>polled-mode</code>, <code>asynchronous</code>, <code>lockless</code>. The SPDK official website has many test documents comparing the performance of SPDK with other open-source implementations, which is still quite considerable.</p>
+<h2 id="7-Summary"><a href="#7-Summary" class="headerlink" title="7. Summary"></a>7. Summary</h2><p>I’m using SPDK for two years and is generally quite satisfied. The SPDK community provides various means for everyone to communicate. The SPDK China team also frequently publishes technical articles, technical videos, etc. Moreover, SPDK has been continuously evolving, absorbing and supporting various software and hardware new features. By learning SPDK, we can be exposed to various aspects of the storage technology stack. Therefore, I believe that as a storage professional, whether or not you use SPDK in your work, you must understand the various high-performance storage technologies behind SPDK.</p>
+<h2 id="Network-Stack"><a href="#Network-Stack" class="headerlink" title="Network Stack"></a>Network Stack</h2><p>SPDK covers the entire path from front-end to network transmission to back-end write operations.</p>
+<h2 id="8-Reference-Links"><a href="#8-Reference-Links" class="headerlink" title="8. Reference Links"></a>8. Reference Links</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://spdk.io/doc/index.html">Storage Performance Development Kits</a> SPDK official documentation</li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/69629212">Virtualization Technology - Overview [Part 1]</a></li>
+<li><a target="_blank" rel="noopener" href="https://ci.spdk.io/download/performance-reports/SPDK_rdma_perf_report_2001.pdf">20.01 SPDK NVMe-oF RDMA Performance Report</a></li>
+</ol>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="en">
+    <link itemprop="mainEntityOfPage" href="https://rolandqi.github.io/2023/05/11/Cloud-Block-Device-Flow-Control-Strategies/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Roland Qi">
+      <meta itemprop="description" content="my thinking of distributed system, database, computer architecture, deep learning and more.">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Roland's Programmig Thinking">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2023/05/11/Cloud-Block-Device-Flow-Control-Strategies/" class="post-title-link" itemprop="url">Cloud Block Device Flow Control Strategies</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2023-05-11 12:39:50" itemprop="dateCreated datePublished" datetime="2023-05-11T12:39:50+00:00">2023-05-11</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2025-11-11 05:21:08" itemprop="dateModified" datetime="2025-11-11T05:21:08+00:00">2025-11-11</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h2 id="QoS-Rate-Limiting-Algorithms-Introduction"><a href="#QoS-Rate-Limiting-Algorithms-Introduction" class="headerlink" title="QoS Rate Limiting Algorithms Introduction"></a>QoS Rate Limiting Algorithms Introduction</h2><p>Rate limiting strategies mainly include token bucket and leaky bucket, which are introduced as follows.</p>
+<h3 id="Token-Bucket"><a href="#Token-Bucket" class="headerlink" title="Token Bucket"></a>Token Bucket</h3><p>Wiki’s algorithm description of token bucket is as follows:</p>
+<ul>
+<li>A token is added to the bucket every <code>1/r</code> seconds.</li>
+<li>The bucket can hold at the most <code>b</code> tokens. If a token arrives when the bucket is full, <strong>it is discarded</strong>.</li>
+<li>When a packet (network layer PDU) of n bytes arrives,<ul>
+<li>if at least n tokens are in the bucket, n tokens are removed from the bucket, and the packet is sent to the network.</li>
+<li>if fewer than n tokens are available, no tokens are removed from the bucket, and the packet is considered to be non-conformant.</li>
+</ul>
+</li>
+</ul>
+<p>A bucket with fixed capacity holds a certain number of tokens, where the bucket’s capacity is the upper limit of token count. The number of tokens in the bucket is replenished at fixed intervals until the bucket is full. An IO request will consume one token; if there are tokens in the bucket, the IO request is allowed after consuming a token; otherwise, it cannot be allowed (the algorithm can choose whether to discard the IO request). If rate limiting is based on byte count, each IO will consume tokens equivalent to the iosize.</p>
+<p>Based on the above description, we can understand that the token bucket algorithm can achieve the following effects:</p>
+<ol>
+<li>The token bucket algorithm can control the rate of processing IO requests by controlling the token replenishment rate;</li>
+<li><strong>The token bucket algorithm allows a certain degree of burst</strong>—as long as the tokens in the bucket are not exhausted, IO requests can immediately consume tokens and be allowed through. During this period, the IO request processing rate will be greater than the token replenishment rate, where the token replenishment rate actually represents the average processing rate;</li>
+<li>**The token bucket algorithm cannot control the upper limit of burst rate and burst duration. The burst duration is determined by the actual IO request rate. If the actual IO request rate is greater than the token replenishment rate and remains constant, then: Burst duration &#x3D; Token bucket capacity &#x2F; (Actual IO request rate - Token replenishment rate)</li>
+</ol>
+<h3 id="Leaky-Bucket"><a href="#Leaky-Bucket" class="headerlink" title="Leaky Bucket"></a>Leaky Bucket</h3><h4 id="Leaky-bucket-as-a-meter"><a href="#Leaky-bucket-as-a-meter" class="headerlink" title="Leaky bucket as a meter"></a>Leaky bucket as a meter</h4><p>Wiki defines Leaky bucket as a meter as follows:</p>
+<ul>
+<li>A fixed capacity bucket, associated with each virtual connection or user, leaks at a fixed rate.</li>
+<li>If the bucket is empty, it stops leaking.</li>
+<li>For a packet to conform, it has to be possible to add a specific amount of water to the bucket: The specific amount added by a conforming packet can be the same for all packets, or can be proportional to the length of the packet.</li>
+<li>If this amount of water would cause the bucket to exceed its capacity then the packet does not conform and the water in the bucket is left unchanged.</li>
+</ul>
+<p>We can understand it as follows:</p>
+<p>A bucket leaks water at a fixed rate. Passing IO request packets add water to the bucket. The amount of water added is based on the aspect of flow control, which could be bytes or IOPS. If adding water causes overflow, the IO cannot pass; otherwise, it can be allowed through.</p>
+<p>It can be seen that this algorithm description is basically similar to the token bucket. We can consider <code>Leaky bucket as a meter</code> and <code>Token Bucket</code> to be equivalent.</p>
+<h4 id="Leaky-bucket-as-a-queue"><a href="#Leaky-bucket-as-a-queue" class="headerlink" title="Leaky bucket as a queue"></a>Leaky bucket as a queue</h4><p>Wiki’s description of this rate limiting strategy is: <strong>The leaky bucket consists of a finite queue. When a packet arrives, if there is room on the queue it is appended to the queue; otherwise it is discarded. At every clock tick one packet is transmitted (unless the queue is empty)</strong></p>
+<p>It can be considered that <code>Leaky bucket as a queue</code> is the scenario where the token bucket size equals 1.</p>
+<h2 id="Mainstream-Block-Device-Flow-Control-Solutions"><a href="#Mainstream-Block-Device-Flow-Control-Solutions" class="headerlink" title="Mainstream Block Device Flow Control Solutions"></a>Mainstream Block Device Flow Control Solutions</h2><p>The mainstream flow control strategies widely applied in engineering mainly include three types: qemu, librbd, and spdk, which are introduced respectively below.</p>
+<h3 id="Qemu"><a href="#Qemu" class="headerlink" title="Qemu"></a>Qemu</h3><p>Qemu supported block device IO rate limiting as early as version 1.1, providing 6 configuration items to set rate limits for IOPS and bandwidth in 6 different scenarios. Version 1.7 added support for bursts to block device IO rate limiting. Version 2.6 improved the burst support functionality, allowing control over burst rate and duration. The parameters are as follows:</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Basic Rate Limit Config</th>
+<th>Burst Rate Config</th>
+<th>Burst Duration Config</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Total IOPS</td>
+<td>iops-total</td>
+<td>iops-total-max</td>
+<td>iops-total-max-length</td>
+</tr>
+<tr>
+<td>Read IOPS</td>
+<td>iops-read</td>
+<td>iops-read-max</td>
+<td>iops-read-max-length</td>
+</tr>
+<tr>
+<td>Write IOPS</td>
+<td>iops-write</td>
+<td>iops-write-max</td>
+<td>iops-write-max-length</td>
+</tr>
+<tr>
+<td>Total BPS</td>
+<td>bps-total</td>
+<td>bps-total-max</td>
+<td>bps-total-max-length</td>
+</tr>
+<tr>
+<td>Read BPS</td>
+<td>bps-read</td>
+<td>bps-read-max</td>
+<td>bps-read-max-length</td>
+</tr>
+<tr>
+<td>Write BPS</td>
+<td>bps-write</td>
+<td>bps-write-max</td>
+<td>bps-write-max-length</td>
+</tr>
+</tbody></table>
+<p>The core data structure of its implementation is described as follows:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">LeakyBucket</span> &#123;</span></span><br><span class="line">    <span class="type">uint64_t</span> avg;             <span class="comment">/* IO limit target rate */</span></span><br><span class="line">    <span class="type">uint64_t</span> max;             <span class="comment">/* IO burst limit rate */</span></span><br><span class="line">    <span class="type">double</span>  level;            <span class="comment">/* bucket level in units */</span></span><br><span class="line">    <span class="type">double</span>  burst_level;      <span class="comment">/* bucket level in units (for computing bursts) */</span></span><br><span class="line">    <span class="type">uint64_t</span> burst_length;    <span class="comment">/* Burst duration, default unit is seconds */</span></span><br><span class="line">&#125; LeakyBucket</span><br></pre></td></tr></table></figure>
+
+<p>Qemu’s flow control algorithm uses a leaky bucket implementation. The goal of the algorithm is that the user can have a burst rate of <code>bkt.max</code> for <code>bkt.burst_length</code> seconds, after which the rate drops to <code>bkt.avg</code>.</p>
+<p>To achieve this goal, qemu implements two buckets:</p>
+<ol>
+<li>Main bucket: Size <code>bucket_size</code> is <code>bkt.max * bkt.burst_length</code>, leaking at rate <code>bkt.avg</code>. Normal IOs are processed by the main bucket first.</li>
+<li>Burst bucket: Size <code>burst_bucket_size</code> is set to one-tenth of the main bucket, leaking at rate <code>bkt.max</code>.</li>
+</ol>
+<p>If the main bucket is full, then it needs to wait for the leaky bucket. If the main bucket is not full and a burst bucket is set, it needs to check whether the burst bucket can allow passage. This way, we ensure the IO burst rate through the burst bucket, and guarantee the burst duration through the size of the main bucket.</p>
+<p>The key function controlling whether IO can be allowed is as follows:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* This function compute the wait time in ns that a leaky bucket should trigger</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * @bkt: the leaky bucket we operate on</span></span><br><span class="line"><span class="comment"> * @ret: the resulting wait time in ns or 0 if the operation can go through</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="type">int64_t</span> <span class="title function_">throttle_compute_wait</span><span class="params">(LeakyBucket *bkt)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">double</span> extra; <span class="comment">/* the number of extra units blocking the io */</span></span><br><span class="line">    <span class="type">double</span> bucket_size;   <span class="comment">/* I/O before throttling to bkt-&gt;avg */</span></span><br><span class="line">    <span class="type">double</span> burst_bucket_size; <span class="comment">/* Before throttling to bkt-&gt;max */</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!bkt-&gt;avg) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!bkt-&gt;max) &#123;</span><br><span class="line">        <span class="comment">/* If bkt-&gt;max is 0 we still want to allow short bursts of I/O</span></span><br><span class="line"><span class="comment">         * from the guest, otherwise every other request will be throttled</span></span><br><span class="line"><span class="comment">         * and performance will suffer considerably. */</span></span><br><span class="line">        bucket_size = (<span class="type">double</span>) bkt-&gt;avg / <span class="number">10</span>;</span><br><span class="line">        burst_bucket_size = <span class="number">0</span>;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">/* If we have a burst limit then we have to wait until all I/O</span></span><br><span class="line"><span class="comment">         * at burst rate has finished before throttling to bkt-&gt;avg */</span></span><br><span class="line">        bucket_size = bkt-&gt;max * bkt-&gt;burst_length;</span><br><span class="line">        burst_bucket_size = (<span class="type">double</span>) bkt-&gt;max / <span class="number">10</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* If the main bucket is full then we have to wait */</span></span><br><span class="line">    extra = bkt-&gt;level - bucket_size;</span><br><span class="line">    <span class="keyword">if</span> (extra &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> throttle_do_compute_wait(bkt-&gt;avg, extra);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* If the main bucket is not full yet we still have to check the</span></span><br><span class="line"><span class="comment">     * burst bucket in order to enforce the burst limit */</span></span><br><span class="line">    <span class="keyword">if</span> (bkt-&gt;burst_length &gt; <span class="number">1</span>) &#123;</span><br><span class="line">        assert(bkt-&gt;max &gt; <span class="number">0</span>); <span class="comment">/* see throttle_is_valid() */</span></span><br><span class="line">        extra = bkt-&gt;burst_level - burst_bucket_size;</span><br><span class="line">    <span class="keyword">if</span> (extra &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> throttle_do_compute_wait(bkt-&gt;max, extra);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="librbd"><a href="#librbd" class="headerlink" title="librbd"></a>librbd</h3><p>Ceph supported IO rate limiting for RBD images starting from version 13.2.0 (Mimic). This version only supported rate limiting for total IOPS scenario and supported bursts, allowing configuration of burst rate but not controlling burst duration (effectively equivalent to setting burst duration to 1 second and unmodifiable). Version 14.2.0 (Nautilus) added support for rate limiting in 5 additional scenarios: read IOPS, write IOPS, total BPS, read BPS, and write BPS, while maintaining the same burst support effects.</p>
+<p>Librbd’s rate limiting mechanism supports bursts and allows configuration of burst rates, but does not support controlling burst duration. It is implemented using a token bucket. The token bucket refill rate can be adjusted using the <code>rbd_qos_schedule_tick_min</code> parameter, defaulting to 50ms. Users can configure the base rate and burst rate through the following parameters:</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Basic Rate Limit Config</th>
+<th>Burst Rate Config</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Total IOPS</td>
+<td>rbd_qos_iops_limit</td>
+<td>rbd_qos_iops_burst</td>
+</tr>
+<tr>
+<td>Read IOPS</td>
+<td>rbd_qos_iops_read_limit</td>
+<td>rbd_qos_iops_read_burst</td>
+</tr>
+<tr>
+<td>Write IOPS</td>
+<td>rbd_qos_iops_write_limit</td>
+<td>rbd_qos_iops_write_burst</td>
+</tr>
+<tr>
+<td>Total BPS</td>
+<td>rbd_qos_bps_limit</td>
+<td>rbd_qos_bps_burst</td>
+</tr>
+<tr>
+<td>Read BPS</td>
+<td>rbd_qos_bps_read_limit</td>
+<td>rbd_qos_bps_read_burst</td>
+</tr>
+<tr>
+<td>Write BPS</td>
+<td>rbd_qos_bps_write_limit</td>
+<td>rbd_qos_bps_write_burst</td>
+</tr>
+</tbody></table>
+<h3 id="spdk"><a href="#spdk" class="headerlink" title="spdk"></a>spdk</h3><p>SPDK’s QoS rate limiting is implemented at the bdev layer and uses a token bucket. It supports separate configuration for IOPS and BW but does not support burst rates. Configuration is done via the RPC request <code>bdev_set_qos_limit</code>. The configuration parameters are as follows:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Explanation</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>rw_ios_per_sec</td>
+<td>IOPS limit</td>
+</tr>
+<tr>
+<td>rw_mbytes_per_sec</td>
+<td>Read&#x2F;Write bandwidth limit</td>
+</tr>
+<tr>
+<td>r_mbytes_per_sec</td>
+<td>Read bandwidth limit</td>
+</tr>
+<tr>
+<td>w_mbytes_per_sec</td>
+<td>Write bandwidth limit</td>
+</tr>
+</tbody></table>
+<p>SPDK refills the token bucket by registering a poller function <code>bdev_channel_poll_qos</code>, with a frequency hardcoded as <code>SPDK_BDEV_QOS_TIMESLICE_IN_USEC</code>, defaulting to 1ms. The amount of tokens added per refill is <code>Total rate / Timeslice</code>.</p>
+<p>An IO must pass through all configured token buckets before it can be allowed. A token bucket can be decremented to a negative value in a single operation. Once it becomes negative, all IOs cannot be allowed until the function <code>bdev_channel_poll_qos</code> refills the token bucket to a positive value.</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">int</span></span><br><span class="line"><span class="title function_">bdev_channel_poll_qos</span><span class="params">(<span class="type">void</span> *arg)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">spdk_bdev_qos</span> *<span class="title">qos</span> =</span> arg;</span><br><span class="line">    <span class="type">uint64_t</span> now = spdk_get_ticks();</span><br><span class="line">    <span class="type">int</span> i;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (now &lt; (qos-&gt;last_timeslice + qos-&gt;timeslice_size)) &#123;</span><br><span class="line">        <span class="comment">/* We received our callback earlier than expected - return</span></span><br><span class="line"><span class="comment">         *  immediately and wait to do accounting until at least one</span></span><br><span class="line"><span class="comment">         *  timeslice has actually expired.  This should never happen</span></span><br><span class="line"><span class="comment">         *  with a well-behaved timer implementation.</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">return</span> SPDK_POLLER_IDLE;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* Reset for next round of rate limiting */</span></span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; SPDK_BDEV_QOS_NUM_RATE_LIMIT_TYPES; i++) &#123;</span><br><span class="line">        <span class="comment">/* We may have allowed the IOs or bytes to slightly overrun in the last</span></span><br><span class="line"><span class="comment">         * timeslice. remaining_this_timeslice is signed, so if it&#x27;s negative</span></span><br><span class="line"><span class="comment">         * here, we&#x27;ll account for the overrun so that the next timeslice will</span></span><br><span class="line"><span class="comment">         * be appropriately reduced.</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="keyword">if</span> (qos-&gt;rate_limits[i].remaining_this_timeslice &gt; <span class="number">0</span>) &#123;</span><br><span class="line">            qos-&gt;rate_limits[i].remaining_this_timeslice = <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span> (now &gt;= (qos-&gt;last_timeslice + qos-&gt;timeslice_size)) &#123;</span><br><span class="line">        qos-&gt;last_timeslice += qos-&gt;timeslice_size;</span><br><span class="line">        <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; SPDK_BDEV_QOS_NUM_RATE_LIMIT_TYPES; i++) &#123;</span><br><span class="line">            qos-&gt;rate_limits[i].remaining_this_timeslice +=</span><br><span class="line">                qos-&gt;rate_limits[i].max_per_timeslice;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> bdev_qos_io_submit(qos-&gt;ch, qos);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Impact-of-Rate-Limiting-Strategies-on-Block-Devices"><a href="#Impact-of-Rate-Limiting-Strategies-on-Block-Devices" class="headerlink" title="Impact of Rate Limiting Strategies on Block Devices"></a>Impact of Rate Limiting Strategies on Block Devices</h2><p>Different QoS strategies result in different experiences for the upper-layer block device, mainly reflected in IO latency and <code>%util</code>.</p>
+<h3 id="Latency"><a href="#Latency" class="headerlink" title="Latency"></a>Latency</h3><p>Latency is determined by the burst performance and refill frequency of the QoS strategy.</p>
+<ul>
+<li><strong>Burst Performance</strong>: Configuring a larger leaky bucket or token bucket, or setting up two buckets like Qemu, can enhance the burst performance of the block device, resulting in lower latency when the block device handles burst traffic.<ul>
+<li>This can be tested using the fio command: <code>fio --group_reporting --rw=randwrite --bs=1M --numjobs=1 --iodepth=64 --ioengine=libaio --direct=1 --name test --size=2000G  --filename=/dev/vdb  -iodepth_low=0 -iodepth_batch_submit=64 -thinktime=950ms -thinktime_blocks=64</code>. This issues 1M IOs with a queue depth of 64 each time, waits 950ms after completion, and repeats. If the block device’s burst performance is poor, the observed phenomenon is high <code>iowait</code> latency and an inability to achieve high bandwidth. Furthermore, because we wait a long time between each IO issue, the io util is also low.</li>
+</ul>
+</li>
+<li><strong>Refill Frequency</strong>: A lower refill frequency can cause severe tail latency. For example, if the token bucket refills every 1 second, and if the IOs issued within that 1 second exceed the limit, then some IOs will inevitably experience latency exceeding 1 second, leading to high tail latency.</li>
+</ul>
+<h3 id="IO-util"><a href="#IO-util" class="headerlink" title="IO util"></a>IO util</h3><p>Disk util value is defined as the proportion of time the disk spends processing IOs relative to the total time. It is the ratio of the time the disk queue has IOs to the total time. If the rate limiting algorithm causes the IO processing time to be very evenly distributed (like <code>Leaky bucket as a queue</code>, where IOs are processed one by one intermittently), and the disk queue always has IOs, then the util naturally is high.</p>
+<p>For block devices configured with high burst performance, even very high queue depths can be processed quickly, resulting in naturally low Util.</p>
+<h3 id="Impact-on-Database-Applications"><a href="#Impact-on-Database-Applications" class="headerlink" title="Impact on Database Applications"></a>Impact on Database Applications</h3><p>Here we take the database MySQL built on distributed block devices as an example to discuss the impact of rate limiting strategies on SQL performance.</p>
+<p>In MySQL, there are mainly two parts of IO that significantly affect performance:</p>
+<ol>
+<li>Flushing Dirty Pages<ol>
+<li>To reduce the number of IOs and improve read&#x2F;write performance, MySQL introduces the <code>buffer pool</code>. Modifications to data in MySQL are first made in the buffer pool and flushed at an appropriate time. When the memory data page and the disk data page content are inconsistent, we call this memory page a “dirty page”. After the memory data is written to disk, the content of the memory and disk data pages becomes consistent, called a “clean page”.</li>
+<li>From the usage scenario, we can infer that each dirty page flush must involve large IOs and high queues. If the block device’s burst performance is poor, it will lead to slow dirty page flushing rates, and as mentioned above, this scenario is highly likely to have low ioutil. That is to say, this IO model does not leverage the performance of the rate limiting mechanism.</li>
+<li>The solutions are simple:<ol>
+<li>Reduce the queue depth (the size of each dirty page flush) to offset the limitation of insufficient burst performance.</li>
+<li>Increase the flush frequency to thereby improve ioutil and enhance the utilization of the rate limiting strategy.</li>
+</ol>
+</li>
+</ol>
+</li>
+<li>Flushing Redo-log. Bin-log is not discussed here because the official stance is that the performance loss from enabling bin-log is less than 1%.<ol>
+<li>Redo-log, to ensure correctness, is written sequentially by a single thread. If the block device’s burst performance is poor, it will cause high latency in issuing redo-log, dragging down the entire system’s TPS.</li>
+<li>If redo-log shares the same disk with other IOs, its own priority cannot be reflected, potentially increasing redo-log latency due to dirty page flushing triggering rate limiting.</li>
+<li>The solutions include the following:<ol>
+<li>Increase the block device’s burst capability.</li>
+<li>Elevate the priority of redo-log so that it is issued first. If the block device system does not support IO priorities, you can apply for another disk to be used exclusively for redo-log.</li>
+<li>The upper-layer MySQL application supports concurrently and randomly written redo-log (PolarDB should have already implemented this).</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+<h2 id="Reference-Links"><a href="#Reference-Links" class="headerlink" title="Reference Links"></a>Reference Links</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Token_bucket">Wiki Token bucket</a></li>
+<li><a target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/Leaky_bucket">Wiki Leaky bucket</a></li>
+<li><a target="_blank" rel="noopener" href="https://blog.csdn.net/weixin_28738021/article/details/112610541">Token Bucket Rate Limiting_Qemu and Librbd QoS Rate Limiting Mechanism Comparison and Algorithm Analysis</a></li>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/352213790">Written on the 10th Anniversary of Work</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/qemu/qemu/blob/master/docs/throttle.txt">qemu leaky bucket</a></li>
+<li><a target="_blank" rel="noopener" href="https://support.huaweicloud.com/intl/zh-cn/productdesc-evs/zh-cn_topic_0044524691.html">Huawei Cloud Disk EVS Burst Capability Introduction</a></li>
+<li><a target="_blank" rel="noopener" href="https://support.huaweicloud.com/intl/zh-cn/evs_faq/evs_faq_0019.html">How to Test Cloud Disk Performance</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.alibabacloud.com/help/zh/doc-detail/65077.htm">Stress Testing ESSD Cloud Disk IOPS Performance</a></li>
+<li><a target="_blank" rel="noopener" href="https://cloud.tencent.com/developer/news/626730">Rate Limiting Algorithm: Sliding Window Method</a></li>
+</ol>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="en">
+    <link itemprop="mainEntityOfPage" href="https://rolandqi.github.io/2022/11/11/Will-Multiple-Link-Libraries-with-Same-Function-Names-Cause-Compilation-Errors-in-CC/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Roland Qi">
+      <meta itemprop="description" content="my thinking of distributed system, database, computer architecture, deep learning and more.">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Roland's Programmig Thinking">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2022/11/11/Will-Multiple-Link-Libraries-with-Same-Function-Names-Cause-Compilation-Errors-in-CC/" class="post-title-link" itemprop="url">Will Multiple Link Libraries with Same Function Names Cause Compilation Errors in CC++</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2022-11-11 12:09:11" itemprop="dateCreated datePublished" datetime="2022-11-11T12:09:11+00:00">2022-11-11</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2025-11-11 05:21:08" itemprop="dateModified" datetime="2025-11-11T05:21:08+00:00">2025-11-11</time>
+              </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h2 id="Background"><a href="#Background" class="headerlink" title="Background"></a>Background</h2><p>Due to business requirements, our company uses a closed-source C++ program from Mellanox. Mellanox’s recommended customization approach is to perform custom development on the dynamically linked libraries to add additional functionality.</p>
+<p>During the solution discussion phase, I found that many colleagues were not very clear about the meanings represented by dynamic&#x2F;static libraries, ‌especially when same-name functions exist‌. There was also no clear understanding of what the compilation, linking, and runtime results would be, hence this article was written.</p>
+<h2 id="Basic-Concepts"><a href="#Basic-Concepts" class="headerlink" title="Basic Concepts"></a>Basic Concepts</h2><p>Program function libraries can be divided into the following types:</p>
+<p>‌1. <strong>Static libraries</strong>‌: During compile-time, static libraries are entirely copied into the compilation target, typically existing as .a files<br>‌2. <strong>Shared libraries‌</strong>: Loaded into the program when it starts, they can be shared by different programs, typically existing as <code>.so</code> files<br>‌Dynamically loaded libraries‌: During process runtime, use functions from dlfcn.h to load, call, and close dynamic libraries</p>
+<p>##Testing Same-name Functions</p>
+<p>Using two <code>.c</code> files <code>test1.c</code> and <code>test2.c</code> containing the same-name function void test()</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// test1.c</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">test</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;call from test1.c&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// test2.c</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">test</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;call from test2.c&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>File containing the main function main.c</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// main.c</span></span><br><span class="line"><span class="function"><span class="keyword">extern</span> <span class="type">void</span> <span class="title">test</span><span class="params">()</span></span>;</span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="built_in">test</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Test-1-o-Object-Files"><a href="#Test-1-o-Object-Files" class="headerlink" title="Test 1: .o Object Files"></a>Test 1: <code>.o</code> Object Files</h3><p>Using the following command line, generate object files from test1.c and test2.c, and compile the executable:</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">gcc -c ./test1.c</span><br><span class="line">gcc -c ./test2.c</span><br><span class="line">gcc -o main ./test1.o ./test2.o ./main.c</span><br></pre></td></tr></table></figure>
+
+<p>Resulting in error:</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">./test2.o: In function `test&#x27;:</span><br><span class="line">test2.c:(.text+0x0): multiple definition of `test&#x27;</span><br><span class="line">./test1.o:test1.c:(.text+0x0): first defined here</span><br><span class="line">collect2: error: ld returned 1 exit status</span><br></pre></td></tr></table></figure>
+
+<p>As we can see, linking object files containing same-name functions in the same namespace will result in a multiple definition error.</p>
+<h3 id="Test-2-Static-Libraries"><a href="#Test-2-Static-Libraries" class="headerlink" title="Test 2: Static Libraries"></a>Test 2: Static Libraries</h3><p>Using the following command line to compile static libraries libtest1.a and libtest2.a:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">g++ -c ./test1.c</span><br><span class="line">g++ -c ./test2.c</span><br><span class="line">ar crv libtest1.a test1.o</span><br><span class="line">ar crv libtest2.a test2.o</span><br></pre></td></tr></table></figure>
+
+<p>Then we link and compile:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">gcc -L. ./main.c -ltest1 -ltest2 -o main</span><br></pre></td></tr></table></figure>
+
+<p>Compilation succeeds without errors. Execution result:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ LD_LIBRARY_PATH=. ./main</span><br><span class="line">call from test1.c</span><br></pre></td></tr></table></figure>
+
+<p>Some might ask: “Why no error? I clearly linked two static libraries containing same-name functions into the same executable.”</p>
+<p>To investigate why no error occurred, let’s add the ld option <code>-Wl,--verbose</code> to see what exactly happens during linking. Re-executing compilation, we get the output:</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">...</span><br><span class="line"></span><br><span class="line">attempt to open ./libtest1.so failed</span><br><span class="line">attempt to open ./libtest1.a succeeded</span><br><span class="line">(./libtest1.a)test1.o</span><br><span class="line">attempt to open ./libtest2.so failed</span><br><span class="line">attempt to open ./libtest2.a succeeded</span><br><span class="line"></span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+<p>We can discover that in the final linking result, the output binary only linked the <code>test1.o</code> file from <code>libtest1.a</code>, but did not link <code>libtest2.a</code>. The compiler’s behavior means:</p>
+<ol>
+<li>The compiler searches link libraries sequentially according to linking order.</li>
+<li>First, it finds <code>libtest1.a</code> and discovers it has the function void test() needed by the main function, so it links it.</li>
+<li>When scanning to <code>libtest2.a</code>, since <code>void test()</code> is already provided by the symbol from <code>libtest1.a</code>, it’s no longer linked.<br>A question on <a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/55130965/when-and-why-would-the-c-linker-exclude-unused-symbols">Stack Overflow</a> also discusses this point.</li>
+</ol>
+<p>If we use the ld parameter <code>--whole-archive</code> to forcibly link <code>libtest1.a</code> and <code>libtest2.a</code>, we’ll see the same error as in Test 1:</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ gcc -L. ./main.c -Wl,--whole-archive -ltest1 -ltest2 -Wl,--no-whole-archive -o main</span><br><span class="line">./libtest2.a(test2.o): In function `test&#x27;:</span><br><span class="line">test2.c:(.text+0x0): multiple definition of `test&#x27;</span><br><span class="line">./libtest1.a(test1.o):test1.c:(.text+0x0): first defined here</span><br><span class="line">collect2: error: ld returned 1 exit status</span><br></pre></td></tr></table></figure>
+
+<h3 id="Test-3-Dynamic-Libraries"><a href="#Test-3-Dynamic-Libraries" class="headerlink" title="Test 3: Dynamic Libraries"></a>Test 3: Dynamic Libraries</h3><p>Using the following command line to compile dynamic libraries <code>libtest1.so</code> and <code>libtest2.so</code> and compile the executable:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">gcc -shared -fPIC -o libtest1.so test1.c</span><br><span class="line">gcc -shared -fPIC -o libtest2.so test2.c</span><br><span class="line">gcc -L. ./main.c -ltest1 -ltest2 -o main</span><br></pre></td></tr></table></figure>
+
+<p>Compilation succeeds without errors. Checking with ldd confirms that both libtest1.so and libtest2.so are indeed linked into the main executable. Execution result:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ LD_LIBRARY_PATH=. ./main</span><br><span class="line">call from test1.c</span><br></pre></td></tr></table></figure>
+
+<p>This shows that during dynamic linking, different link libraries can have same-name functions without affecting compilation. This is determined by the nature of dynamic link libraries, which are only dynamically loaded at runtime, and the loading order is determined by the linking order during compilation. This means symbols are resolved on a first match basis.</p>
+<p>We can also use <code>LD_PRELOAD</code> to <a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/426230/what-is-the-ld-preload-trick">preload</a> a certain dynamic library into memory.</p>
+<h2 id="Applications-of-Same-name-Functions"><a href="#Applications-of-Same-name-Functions" class="headerlink" title="Applications of Same-name Functions"></a>Applications of Same-name Functions</h2><p>Some might question: Can it be used in daily work? The answer is definitely yes.</p>
+<p>The simplest application scenario: for example, if there’s a function in an open-source library that I don’t like, and I want to write my own version to replace it, I can completely use the above knowledge to link my implemented function into the executable file dynamically or statically, replacing the version I don’t like.</p>
+<p>Common industrial applications include:</p>
+<p>‌1. Library Replacement‌: The famous <code>tcmalloc</code> operates in this way. We link tcmalloc into the program, and as long as the tcmalloc library’s search order precedes libc, we can replace the native memory management functions with the tcmalloc version.<br>‌2. Mock Testing‌: Chen Shuo detailed in an article how to mock system calls in C++ unit testing. The ‌<strong>link seams‌</strong> method utilizes the characteristic that libc is generally dynamically linked to mock system calls in the process.</p>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="en">
     <link itemprop="mainEntityOfPage" href="https://rolandqi.github.io/2022/09/25/How-to-Manage-Memory-Alignment-in-Modern-C/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -175,10 +675,16 @@
                 <i class="fa fa-calendar-o"></i>
               </span>
               <span class="post-meta-item-text">Posted on</span>
-              
 
-              <time title="Created: 2022-09-25 10:21:28 / Modified: 13:33:31" itemprop="dateCreated datePublished" datetime="2022-09-25T10:21:28+00:00">2022-09-25</time>
+              <time title="Created: 2022-09-25 10:21:28" itemprop="dateCreated datePublished" datetime="2022-09-25T10:21:28+00:00">2022-09-25</time>
             </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2025-11-11 05:21:08" itemprop="dateModified" datetime="2025-11-11T05:21:08+00:00">2025-11-11</time>
+              </span>
 
           
 
@@ -345,12 +851,12 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">1</span>
+          <span class="site-state-item-count">4</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
       <div class="site-state-item site-state-tags">
-        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-count">6</span>
         <span class="site-state-item-name">tags</span>
       </div>
   </nav>
@@ -377,7 +883,7 @@
 <div class="copyright">
   
   &copy; 
-  <span itemprop="copyrightYear">2022</span>
+  <span itemprop="copyrightYear">2025</span>
   <span class="with-love">
     <i class="fa fa-user"></i>
   </span>
